@@ -1,0 +1,537 @@
+---
+title: "Rapport du projet d'Analyse de données"
+author: "Lorcan Johnson, Léonie Toulzat"
+institute : "INSA Toulouse"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document :
+    toc : TRUE
+    toc_depth : 2
+    number_section : TRUE
+header-includes:
+   - \usepackage{dsfont}
+   - \usepackage{color}
+   - \newcommand{\1}{\mathds{1}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(corrplot)
+library(FactoMineR)
+library(factoextra)
+library(gridExtra)
+```
+
+```{r,echo=F, error=F,warning=F}
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+library(forcats)
+library(reshape2)
+library(BioStatR)
+```
+
+```{r,echo=F, error=F,warning=F,message=F}
+library(forcats)
+library(ggplot2)
+library(corrplot)
+library(reshape2)
+
+library(FactoMineR)
+library(factoextra)
+
+library(mclust)
+library(cluster)
+library(ppclust)
+
+library(circlize)
+library(ggalluvial)
+```
+
+\vspace{1cm}
+
+# Introduction
+
+Votre rapport doit synthétiser votre travail d'étude du jeu de données abordé durant le projet commun. Il doit comprendre :
+
+-   une organisation par sections, sous-sections, ... une introduction et une conclusion
+-   pour chaque méthode d'analyse considérée : expliquer son principe et l'objectif, la mettre en application, commenter les résultats
+-   Toute figure doit avoir une légende et doit être commentée
+-   Même remarque pour les tableaux de résultats
+-   ....
+
+# Description du jeu de données
+
+Gènes G : variable qualitative Différence d'expression Y : variable quantitative ExpT1, ExpT2, ExpT3 : variable qualitative
+
+# Analyse uni-dimensionnelle et bi-dimensionnelle
+
+```{r, echo=F, eval=T}
+dataprojet <- read.table("DataProjet3MIC-2425.txt",header=TRUE,sep=";")
+#head(dataprojet)
+#dim(dataprojet)
+#is.data.frame(dataprojet)
+#colnames(dataprojet)
+#attributes(dataprojet)
+#str(dataprojet)
+```
+
+```{r, echo=F, eval=T}
+dataprojet$ExpT1<-as.factor(dataprojet$ExpT1) 
+dataprojet$ExpT2<-as.factor(dataprojet$ExpT2) 
+dataprojet$ExpT3<-as.factor(dataprojet$ExpT3) 
+#head(dataprojet) 
+#summary(dataprojet)
+
+```
+
+## Etude statistique unidimensionnelle
+
+### Variable qualitative
+
+Pour les variables qualitatives, les facteurs sont ExpT1, ExpT2, ExpT3, et ont chacun comme modalités : "Non", "Sous", et "Sur".
+
+```{r,echo=F}
+g1<-ggplot(dataprojet, aes(x=ExpT1))+ 
+  geom_bar()+
+  ylab("")+ggtitle("Effectifs")
+g2<-ggplot(dataprojet, aes(x = ExpT1)) +  
+  geom_bar(aes(y = (after_stat(count))/sum(after_stat(count))))+ylab("")+ggtitle("Frequences")
+
+df <- data.frame(group = levels(dataprojet$ExpT1),
+                 value = as.vector(table(dataprojet$ExpT1))/nrow(dataprojet))
+g3<-ggplot(df, aes(x="", y=value, fill=group))+
+  geom_bar(width = 1, stat = "identity")+ 
+  coord_polar("y", start=0)+ 
+  theme(legend.position="bottom")
+grid.arrange(g3,g1,g2,ncol=3)
+```
+
+Pour 80% des gènes traités avec T1, on n'observe pas de différence d'expression significative à 6h.
+
+```{r,echo=F}
+g1<-ggplot(dataprojet, aes(x=ExpT2))+ 
+  geom_bar()+
+  ylab("")+ggtitle("Effectifs")
+g2<-ggplot(dataprojet, aes(x = ExpT2)) +  
+  geom_bar(aes(y = (after_stat(count))/sum(after_stat(count))))+ylab("")+ggtitle("Frequences")
+
+df <- data.frame(group = levels(dataprojet$ExpT2),
+                 value = as.vector(table(dataprojet$ExpT2))/nrow(dataprojet))
+g3<-ggplot(df, aes(x="", y=value, fill=group))+
+  geom_bar(width = 1, stat = "identity")+ 
+  coord_polar("y", start=0)+ 
+  theme(legend.position="bottom")
+grid.arrange(g3,g1,g2,ncol=3)
+```
+
+```{r,echo=F}
+g1<-ggplot(dataprojet, aes(x=ExpT3))+ 
+  geom_bar()+
+  ylab("")+ggtitle("Effectifs")
+g2<-ggplot(dataprojet, aes(x = ExpT3)) +  
+  geom_bar(aes(y = (after_stat(count))/sum(after_stat(count))))+ylab("")+ggtitle("Frequences")
+
+df <- data.frame(group = levels(dataprojet$ExpT3),
+                 value = as.vector(table(dataprojet$ExpT3))/nrow(dataprojet))
+g3<-ggplot(df, aes(x="", y=value, fill=group))+
+  geom_bar(width = 1, stat = "identity")+ 
+  coord_polar("y", start=0)+ 
+  theme(legend.position="bottom")
+grid.arrange(g3,g1,g2,ncol=3)
+
+```
+
+Les variables ExpTi sont ordinales, on peut donc utiliser les effectifs cumulés et les fréquences cumulées. On assigne donc l'ordre des modalités à R. Ici, on a donc organisé les modalités en `sous`, `non`, `sur`.
+
+```{r,echo=F,eval=F}
+dataprojet$ExpT1 <- fct_relevel(dataprojet$ExpT1,"sous","non","sur")
+
+EffQual=as.vector(table(dataprojet$ExpT1))
+FreqQual= data.frame(Eff = EffQual, Freq = EffQual/length(dataprojet$ExpT1), FreqCumul=cumsum(EffQual)/length(dataprojet$ExpT1))
+rownames(FreqQual)=levels(dataprojet$ExpT1)
+
+knitr::kable(FreqQual, caption = 'Description de la variable ExpT1',booktabs = TRUE,digits=3)
+```
+
+```{r,echo=F}
+df <- data.frame(ExpT1 = levels(dataprojet$ExpT1), value = table(dataprojet$ExpT1),
+    valuecumul = 100 * cumsum(prop.table(table(dataprojet$ExpT1))))
+df$ExpT1 <- fct_relevel(df$ExpT1, "bad", "medium", "good")
+
+df <- data.frame(df, freq = df$value.Freq/nrow(dataprojet))
+g1 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT1)) + ggtitle("Effectifs")+xlab("Qualite")
+g2 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT1, y = ..prop.., group = 1)) + ggtitle("Frequences")+xlab("Qualite")
+g3 <- ggplot(df, aes(x = ExpT1, y = valuecumul)) + geom_bar(stat = "identity") +
+    ggtitle("Fréquences cumulées")
+
+g4 <- ggplot(df, aes(x = "", y = freq, fill = ExpT1)) + geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0)
+grid.arrange(g1, g2, g3, g4, ncol = 2)
+```
+
+```{r,echo=F,eval=F}
+dataprojet$ExpT2 <- fct_relevel(dataprojet$ExpT2,"sous","non","sur")
+
+EffQual=as.vector(table(dataprojet$ExpT2))
+FreqQual= data.frame(Eff = EffQual, Freq = EffQual/length(dataprojet$ExpT2), FreqCumul=cumsum(EffQual)/length(dataprojet$ExpT2))
+rownames(FreqQual)=levels(dataprojet$ExpT2)
+
+knitr::kable(FreqQual, caption = 'Description de la variable ExpT2',booktabs = TRUE,digits=3)
+```
+
+```{r,echo=F}
+df <- data.frame(ExpT2 = levels(dataprojet$ExpT2), value = table(dataprojet$ExpT2),
+    valuecumul = 100 * cumsum(prop.table(table(dataprojet$ExpT2))))
+df$ExpT1 <- fct_relevel(df$ExpT2, "bad", "medium", "good")
+
+df <- data.frame(df, freq = df$value.Freq/nrow(dataprojet))
+g1 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT2)) + ggtitle("Effectifs")+xlab("Qualite")
+g2 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT2, y = ..prop.., group = 1)) + ggtitle("Frequences")+xlab("Qualite")
+g3 <- ggplot(df, aes(x = ExpT2, y = valuecumul)) + geom_bar(stat = "identity") +
+    ggtitle("Fréquences cumulées")
+
+g4 <- ggplot(df, aes(x = "", y = freq, fill = ExpT2)) + geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0)
+grid.arrange(g1, g2, g3, g4, ncol = 2)
+```
+
+```{r,echo=F,eval=F}
+dataprojet$ExpT3 <- fct_relevel(dataprojet$ExpT3,"sous","non","sur")
+
+EffQual=as.vector(table(dataprojet$ExpT3))
+FreqQual= data.frame(Eff = EffQual, Freq = EffQual/length(dataprojet$ExpT3), FreqCumul=cumsum(EffQual)/length(dataprojet$ExpT3))
+rownames(FreqQual)=levels(dataprojet$ExpT3)
+
+knitr::kable(FreqQual, caption = 'Description de la variable ExpT3',booktabs = TRUE,digits=3)
+```
+
+```{r,echo=F}
+df <- data.frame(ExpT3 = levels(dataprojet$ExpT3), value = table(dataprojet$ExpT3),
+    valuecumul = 100 * cumsum(prop.table(table(dataprojet$ExpT3))))
+df$ExpT1 <- fct_relevel(df$ExpT3, "bad", "medium", "good")
+
+df <- data.frame(df, freq = df$value.Freq/nrow(dataprojet))
+g1 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT3)) + ggtitle("Effectifs")+xlab("Qualite")
+g2 <- ggplot(dataprojet) + geom_bar(aes(x = ExpT3, y = ..prop.., group = 1)) + ggtitle("Frequences")+xlab("Qualite")
+g3 <- ggplot(df, aes(x = ExpT3, y = valuecumul)) + geom_bar(stat = "identity") +
+    ggtitle("Fréquences cumulées")
+
+g4 <- ggplot(df, aes(x = "", y = freq, fill = ExpT3)) + geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start = 0)
+grid.arrange(g1, g2, g3, g4, ncol = 2)
+```
+
+### Variable quantitative
+
+#### Indicateurs statistiques
+
+Afin de confirmer ce que nous avons vu en analysant les variables qualitatives, on se propose d'analyser les différences d'expression des gènes entre chaque traitement pour le réplicat R1 à 6h.
+
+```{r,echo=F}
+mean(dataprojet$T1_6H_R1)
+median(dataprojet$T1_6H_R1)
+var(dataprojet$T1_6H_R1) #variance
+sd(dataprojet$T1_6H_R1) #ecart-type
+range(dataprojet$T1_6H_R1)
+```
+
+/!\\ ECARTS INTERQUARTILES ET QUANTILES
+
+```{r,echo=F}
+H1<-hist(dataprojet$T1_6H_R1)
+H2<-hist(dataprojet$T2_6H_R1)
+H3<-hist(dataprojet$T3_6H_R1)
+```
+
+```{r boxplot, echo=F}
+dataaux<-melt(dataprojet[,-c(37,39)])
+ggplot(dataaux,aes(x=variable,y=value))+
+  geom_boxplot()
+```
+
+```{r,echo=F}
+
+c=cor(dataprojet[,seq(6,ncol(dataprojet),by=6)])
+
+v=var(dataprojet[,1:36])
+
+corrplot(c)
+```
+
+On constate une forte corrélation entre les réplicats 1 et 2 de T2 et ceux de T3 ; on a une corrélation moindre entre ceux de T1. On constate aussi que peu importe les réplicats, T2 et T3 sont corrélés, ce qui n'est pas le cas pour T1.
+
+```{r,echo=F}
+ggplot(data=dataprojet, aes(x=T2_6H_R1,y=T3_6H_R1))+geom_point()+geom_smooth(method="lm")
+```
+
+Ce graphe confirme bien ce qu'on a déduit de la matrice de corrélation.
+
+```{r,echo=F}
+ggplot(data=dataprojet, aes(x=T1_6H_R1,y=T3_6H_R1))+geom_point()+geom_smooth(method="lm")
+```
+
+Donc aucune corrélation.
+
+```{r,echo=F}
+ggplot(data=dataprojet, aes(x=ExpT1,y=T1_6H_R1))+geom_boxplot()
+ggplot(data=dataprojet, aes(x=ExpT1,y=T1_6H_R2))+geom_boxplot()
+ggplot(data=dataprojet, aes(x=ExpT2,y=T2_6H_R1))+geom_boxplot()
+ggplot(data=dataprojet, aes(x=ExpT2,y=T2_6H_R2))+geom_boxplot()
+ggplot(data=dataprojet, aes(x=ExpT3,y=T3_6H_R1))+geom_boxplot()
+ggplot(data=dataprojet, aes(x=ExpT3,y=T3_6H_R2))+geom_boxplot()
+```
+
+Cohérent avec la matrice de corrélation.
+
+```{r,echo=F}
+addmargins(table(dataprojet$ExpT1,dataprojet$ExpT2))
+addmargins(table(dataprojet$ExpT2,dataprojet$ExpT3))
+addmargins(table(dataprojet$ExpT1,dataprojet$ExpT3))
+```
+
+```{r,echo=F}
+prop.table(x=table(dataprojet$ExpT1,dataprojet$ExpT2), margin=1)
+mosaicplot(prop.table(x=table(dataprojet$ExpT1,dataprojet$ExpT2), margin=1))
+prop.table(x=table(dataprojet$ExpT1,dataprojet$ExpT2), margin=2)
+mosaicplot(prop.table(x=table(dataprojet$ExpT1,dataprojet$ExpT2), margin=2))
+```
+
+# ACP
+
+```{r, echo=F}
+respca<-PCA(dataprojet,quali.sup=c(37,38,39),scale.unit = F,graph=F)
+respca$eig
+fviz_eig(respca)
+```
+
+```{r, echo=F}
+dataprojetC<-scale(dataprojet[,1:36],center=TRUE, scale=TRUE) 
+apply(dataprojetC,2,mean) # moyennes à 0 donc centré
+apply(dataprojetC,2,sd) # écart-types à 1 donc réduit
+respca$eig
+fviz_eig(respca)
+respca<-PCA(dataprojetC,scale.unit = T,graph=T)
+respca$eig
+fviz_eig(respca)
+```
+
+```{r, echo=F}
+corrplot(respca$var$cor,method="ellipse")
+```
+
+# K-means
+
+## K-means à K=3
+
+```{r, echo=F, eval=T}
+help("kmeans")
+reskmeans<-kmeans(x=dataprojetC,centers=3, nstart=1, algorithm="MacQueen")
+reskmeans
+```
+
+```{r, echo=F}
+dim(dataprojet[,-c(37,38,39)])
+fviz_cluster(reskmeans,data=dataprojet[,-c(37,38,39)],
+             ellipse.type="norm",labelsize=8,
+             geom=c("point"))+ggtitle("")
+fviz_pca_ind(respca,col.ind=as.factor(reskmeans$cluster),
+             geom = c("point"),axes=c(1,2))
+```
+
+```{r, echo=F}
+table(reskmeans$cluster,dataprojet$ExpT1) 
+table(reskmeans$cluster,dataprojet$ExpT2) 
+table(reskmeans$cluster,dataprojet$ExpT3) 
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT1)
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT2)
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT3)
+```
+
+Lien surtout avec le deuxième et le troisième traitement ? Moins avec le premier ?
+
+```{r, echo=F}
+clust<-paste("Cl-K",reskmeans$cluster,sep="")
+Tab<-melt(table(clust,dataprojet$ExpT1))
+ggplot(Tab,aes(y=value,axis1=clust,axis2=Var2))+
+  geom_alluvium(aes(fill=clust))+
+  geom_stratum(width = 1/12)+   
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)))+
+  theme(legend.position = "none")
+chordDiagram(table(clust,dataprojet$ExpT1))
+```
+
+## Choix du nombre de classes
+
+```{r, echo=F}
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(dataprojet),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(dataprojetC,centers=k, nstart=1, algorithm="MacQueen")
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+
+  geom_line()+
+  geom_point()+
+  xlab("Nombre de classes")+
+  ylab("Inertie intraclasse")
+```
+
+```{r, ehco=F}
+Silhou<-NULL
+for (k in 2:Kmax){
+   aux<-silhouette(reskmeanscl[,k-1], daisy(dataprojetC))
+   Silhou<-c(Silhou,mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+
+aux<-silhouette(reskmeanscl[,2], daisy(dataprojetC))
+fviz_silhouette(aux)+
+  theme(plot.title = element_text(size =9))
+rm(df,Silhou,aux)
+```
+
+Choix de 3 classes car grosse différence de l'inertie intraclasse entre 2 et 3 classes et différence moins importante entre 3 et 4 classes donc coude atteint pour 3 classes ; aussi, critère silhouette maximal atteint pour k=3 classes
+
+Classification avec PAM ?
+
+# Jeu de données DataExpMoy
+
+## Création du jeu de données DataExpMoy :
+
+```{r, echo=F, eval=T}
+DataExpMoy=matrix(0, nrow=542, ncol=18)
+for (j in 1:542){
+  for (k in 1:18){
+    DataExpMoy[j,k]=(dataprojet[j,k]+dataprojet[j,k+18])/2
+  }
+}
+#DataExpMoy
+summary(DataExpMoy)
+```
+
+## ACP sur DataExpMoy
+
+```{r, echo=F}
+help("PCA")
+vect=c(dataprojet[37],dataprojet[38],dataprojet[39])
+respca2<-PCA(DataExpMoy,scale.unit = F,graph=F)
+respca2$eig
+fviz_eig(respca2)
+```
+
+```{r, echo=F}
+DataExpMoyC<-scale(DataExpMoy,center=TRUE, scale=TRUE) 
+apply(DataExpMoyC,2,mean) # moyennes à 0 donc centré
+apply(DataExpMoyC,2,sd) # écart-types à 1 donc réduit
+respca2$eig
+fviz_eig(respca2)
+respca2<-PCA(DataExpMoyC,scale.unit = T,graph=T)
+respca2$eig
+fviz_eig(respca2)
+```
+
+```{r, echo=F}
+corrplot(respca2$var$cor,method="ellipse")
+```
+
+Ca me paraît cohérent avec ce qu'on avait eu avant (corrplot sur dataprojet)
+
+## K-means
+
+Choix du nombre de classes :
+
+```{r, echo=F}
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(DataExpMoy),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(DataExpMoyC,centers=k, nstart=1, algorithm="MacQueen")
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+
+  geom_line()+
+  geom_point()+
+  xlab("Nombre de classes")+
+  ylab("Inertie intraclasse")
+```
+
+```{r, echo=F}
+Silhou<-NULL
+for (k in 2:Kmax){
+   aux<-silhouette(reskmeanscl[,k-1], daisy(DataExpMoyC))
+   Silhou<-c(Silhou,mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+
+aux<-silhouette(reskmeanscl[,3], daisy(DataExpMoyC))
+fviz_silhouette(aux)+
+  theme(plot.title = element_text(size =9))
+rm(df,Silhou,aux)
+```
+
+On utilise 4 classes.
+
+```{r, echo=F, eval=F}
+reskmeans<-kmeans(DataExpMoyC,centers=4, nstart=1, algorithm="MacQueen")
+reskmeans
+```
+
+```{r, echo=F}
+fviz_cluster(reskmeans,data=DataExpMoy,
+             ellipse.type="norm",labelsize=8,
+             geom=c("point"))+ggtitle("")
+fviz_pca_ind(respca,col.ind=as.factor(reskmeans$cluster),
+             geom = c("point"),axes=c(1,2))
+```
+
+```{r, echo=F}
+table(reskmeans$cluster,dataprojet$ExpT1) 
+table(reskmeans$cluster,dataprojet$ExpT2) 
+table(reskmeans$cluster,dataprojet$ExpT3) 
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT1)
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT2)
+adjustedRandIndex(reskmeans$cluster,dataprojet$ExpT3)
+```
+
+Lien avec ExpT2 et ExpT3 ? Si c'est vrai, cohérent avec l'analyse sur dataprojet
+
+## Classification hiérarchique (pour DataExpMoy et/ou pour dataprojet ?)
+
+```{r, echo=F}
+dx<-dist(DataExpMoy,method="euclidian")
+hward<-hclust(dx,method="ward.D2")
+fviz_dend(hward,k=4, show_labels=FALSE,
+          rect=TRUE,rect_fill=TRUE,palette="npg",
+          rect_border="npg",
+          labels_track_height=0.8)+ggtitle("")
+```
+
+Signification ? 1 classe vraiment plus petite que les autres, normal ? Bon nombre de classes ou à changer ? Est-ce qu'il faut faire ça sur le jeu de données normal ou le centré réduit ?
+
+Quelle distance ? =\> distance euclidienne ?
+
+Quelle mesure d'agrégation ? =\> Ward
+
+```{r, echo=F}
+help("fviz_dend")
+help("dist")
+#help("hclust")
+```
